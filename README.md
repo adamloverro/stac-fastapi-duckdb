@@ -23,6 +23,7 @@ This project is built on the following technologies: STAC, stac-fastapi, SFEOS c
 ## Table of Contents
 
 - [Quick Start with Docker](#quick-start-with-docker)
+- [Local Development](#local-development)
 - [Usage](#usage)
   - [Supported Query Parameters](#supported-query-parameters)
   - [Example Queries](#example-queries)
@@ -67,6 +68,56 @@ The easiest way to get started is using Docker and the provided Makefile:
    # Stop the container
    make down
    ```
+
+## Local Development
+
+For local development without Docker, you can run the FastAPI server and tests directly on your machine:
+
+### Prerequisites
+
+1. **Install Python dependencies**:
+   ```bash
+   pip install -e .[dev,server]
+   ```
+
+2. **Install pre-commit hooks** (optional but recommended):
+   ```bash
+   pre-commit install
+   ```
+
+### Running the Server Locally
+
+```bash
+# Run the FastAPI server locally on http://localhost:8000
+make up-local
+```
+
+This will start the server using your local Python environment with the demo data.
+
+### Running Tests Locally
+
+```bash
+# Run the full test suite locally
+make test-local
+```
+
+This runs pytest against your local environment, which is faster than Docker-based testing.
+
+### Manual Commands
+
+If you prefer to run commands manually, you can use:
+
+```bash
+# Start server manually
+STAC_FILE_PATH="./stac_collections" \
+PARQUET_URLS_JSON='{"io-lulc-9-class":"file://./stac_collections/io-lulc-9-class/io-lulc-9-class.parquet"}' \
+python -m stac_fastapi.duckdb.app
+
+# Run tests manually  
+STAC_FILE_PATH="./stac_collections" \
+PARQUET_URLS_JSON='{"io-lulc-9-class":"file://./stac_collections/io-lulc-9-class/io-lulc-9-class.parquet"}' \
+pytest tests/ -v
+```
 
 ## API Endpoints
 
@@ -136,14 +187,29 @@ curl -X POST "http://localhost:8085/search" \
 
 ### Running Tests
 
-The project includes a Makefile with commands to run tests:
+The project includes a Makefile with commands to run tests both locally and in Docker:
 
 ```bash
+# Run tests locally (fastest)
+make test-local
+
 # Build and run tests in Docker
 make test-build
 
 # Run tests in existing Docker container
 make test
+```
+
+### Running the Server
+
+You can run the server either locally or in Docker:
+
+```bash
+# Run server locally on http://localhost:8000
+make up-local
+
+# Run server in Docker on http://localhost:8085
+make up
 ```
 
 ### Pre-commit

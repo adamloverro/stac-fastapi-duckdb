@@ -29,6 +29,19 @@ logs: ## Tail logs
 DOCKER_ENV = STAC_FILE_PATH="$(STAC_DIR)" \
 	PARQUET_URLS_JSON='{"io-lulc-9-class":"$(PARQUET_URL)"}'
 
+LOCAL_ENV = STAC_FILE_PATH="$(STAC_DIR)" \
+	PARQUET_URLS_JSON='{"io-lulc-9-class":"file://$(DEMO_PARQUET)"}'
+
+up-local: ## Run the FastAPI app locally without Docker
+	@echo "Starting STAC FastAPI DuckDB server locally..."
+	@echo "Server will be available at: http://localhost:8000"
+	@echo "Press Ctrl+C to stop"
+	$(LOCAL_ENV) python -m stac_fastapi.duckdb.app
+
+test-local: ## Run pytest test suite locally
+	@echo "Running local tests..."
+	$(LOCAL_ENV) pytest tests/ -v
+
 test: ## Run tests in docker
 	$(DOCKER_ENV) docker compose exec app-duckdb pytest tests/ -v
 
