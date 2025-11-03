@@ -175,13 +175,104 @@ curl -X POST "http://localhost:8085/search" \
 
 ### Environment Variables
 
-- `PARQUET_URLS_JSON` (required): JSON object mapping collection IDs to Parquet file paths/URLs
-  - Local file example: `{"io-lulc-9-class": "file:///app/stac_collections/io-lulc-9-class/io-lulc-9-class.parquet"}`
-  - S3 example: `{"landsat": "s3://public-bucket/path/landsat.parquet"}`
-  - When running with Docker, use container paths (e.g., `/app/stac_collections/...`)
+#### Core Settings
 
 - `STAC_FILE_PATH` (optional, default: `/app/stac_collections`):
   Directory containing STAC collection JSON files
+
+- `PARQUET_URLS_JSON` (required): JSON object mapping collection IDs to Parquet file paths/URLs
+  - Local file example: `{"io-lulc-9-class": "file:///app/stac_collections/io-lulc-9-class/io-lulc-9-class.parquet"}`
+  - Relative path example: `{"io-lulc-9-class": "data/io-lulc-9-class.parquet"}` (uses storage backend)
+  - S3 example: `{"landsat": "s3://public-bucket/path/landsat.parquet"}`
+  - When running with Docker, use container paths (e.g., `/app/stac_collections/...`)
+
+#### Storage Backend Settings
+
+The storage backend configuration controls how GeoParquet files are accessed. The system supports local filesystem and Azure Blob Storage.
+
+- `STAC_STORAGE_STORAGE_TYPE` (optional, default: `local`):
+  Type of storage backend to use. Options: `local`, `azure_blob`
+
+##### Local Storage Backend
+
+When using local storage (default), files are accessed from the local filesystem.
+
+- `STAC_STORAGE_LOCAL_DATA_PATH` (optional):
+  Base directory for relative paths in `PARQUET_URLS_JSON`
+
+Example configuration:
+```bash
+# .env file for local storage
+STAC_STORAGE_STORAGE_TYPE=local
+STAC_STORAGE_LOCAL_DATA_PATH=/data
+PARQUET_URLS_JSON='{"collection1": "collection1.parquet", "collection2": "collection2.parquet"}'
+```
+
+##### Azure Blob Storage Backend
+
+When using Azure Blob Storage, files are accessed from Azure. The backend supports multiple authentication methods.
+
+- `STAC_STORAGE_AZURE_ACCOUNT_NAME` (required for Azure): Azure storage account name
+- `STAC_STORAGE_AZURE_CONTAINER_NAME` (required for Azure): Azure blob container name
+- `STAC_STORAGE_AZURE_AUTHENTICATION` (optional, default: `managed_identity`):
+  Authentication method. Options:
+  - `managed_identity`: Use Azure Managed Identity (recommended for production)
+  - `sas_token`: Use a SAS (Shared Access Signature) token
+  - `connection_string`: Use a connection string
+
+###### Managed Identity Authentication (Recommended)
+
+Best for production deployments in Azure.
+
+```bash
+# .env file for Azure with Managed Identity
+STAC_STORAGE_STORAGE_TYPE=azure_blob
+STAC_STORAGE_AZURE_ACCOUNT_NAME=mystorageaccount
+STAC_STORAGE_AZURE_CONTAINER_NAME=stac-data
+STAC_STORAGE_AZURE_AUTHENTICATION=managed_identity
+PARQUET_URLS_JSON='{"collection1": "path/to/collection1.parquet"}'
+```
+
+###### SAS Token Authentication
+
+Useful for temporary access or development.
+
+- `STAC_STORAGE_AZURE_SAS_TOKEN` (required when using `sas_token` auth):
+  SAS token for Azure Blob Storage
+
+```bash
+# .env file for Azure with SAS Token
+STAC_STORAGE_STORAGE_TYPE=azure_blob
+STAC_STORAGE_AZURE_ACCOUNT_NAME=mystorageaccount
+STAC_STORAGE_AZURE_CONTAINER_NAME=stac-data
+STAC_STORAGE_AZURE_AUTHENTICATION=sas_token
+STAC_STORAGE_AZURE_SAS_TOKEN=sv=2022-11-02&ss=b&srt=co&sp=r&se=2024-12-31&...
+PARQUET_URLS_JSON='{"collection1": "path/to/collection1.parquet"}'
+```
+
+###### Connection String Authentication
+
+Alternative authentication method.
+
+- `STAC_STORAGE_AZURE_CONNECTION_STRING` (required when using `connection_string` auth):
+  Azure storage connection string
+
+```bash
+# .env file for Azure with Connection String
+STAC_STORAGE_STORAGE_TYPE=azure_blob
+STAC_STORAGE_AZURE_ACCOUNT_NAME=mystorageaccount
+STAC_STORAGE_AZURE_CONTAINER_NAME=stac-data
+STAC_STORAGE_AZURE_AUTHENTICATION=connection_string
+STAC_STORAGE_AZURE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...
+PARQUET_URLS_JSON='{"collection1": "path/to/collection1.parquet"}'
+```
+
+**Note:** To use Azure Blob Storage, install the Azure dependencies:
+```bash
+pip install -e .[azure]
+# or manually:
+pip install azure-storage-blob azure-identity adlfs
+```
 
 ## Development
 
