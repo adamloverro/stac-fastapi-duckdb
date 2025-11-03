@@ -20,8 +20,8 @@ def get_storage_backend(
     azure_connection_string: Optional[str] = None,
     azure_sas_token: Optional[str] = None,
 ) -> StorageBackend:
-    """Factory function to create storage backend instances.
-    
+    """Create storage backend instances.
+
     Args:
         storage_type: Type of storage backend to create ("local", "azure_blob", "s3").
         local_data_path: Base path for local storage (optional).
@@ -30,10 +30,10 @@ def get_storage_backend(
         azure_authentication: Azure authentication method.
         azure_connection_string: Azure connection string.
         azure_sas_token: Azure SAS token.
-    
+
     Returns:
         Configured StorageBackend instance.
-    
+
     Raises:
         ValueError: If storage_type is unsupported or required parameters are missing.
     """
@@ -57,7 +57,9 @@ def get_storage_backend(
         if not azure_container_name:
             raise ValueError("azure_container_name is required for Azure Blob Storage")
 
-        logger.info(f"Creating AzureBlobStorageBackend for {azure_account_name}/{azure_container_name}")
+        logger.info(
+            f"Creating AzureBlobStorageBackend for {azure_account_name}/{azure_container_name}"
+        )
         return AzureBlobStorageBackend(
             account_name=azure_account_name,
             container_name=azure_container_name,

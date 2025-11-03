@@ -11,14 +11,14 @@ logger = logging.getLogger(__name__)
 
 class LocalStorageBackend(StorageBackend):
     """Storage backend for local filesystem access.
-    
+
     This backend handles local file access and provides file:// URLs for DuckDB.
     It maintains backward compatibility with the existing local file support.
     """
 
     def __init__(self, base_path: Optional[str] = None):
         """Initialize the local storage backend.
-        
+
         Args:
             base_path: Optional base directory for relative paths.
                       If not provided, paths are assumed to be absolute.
@@ -28,16 +28,16 @@ class LocalStorageBackend(StorageBackend):
 
     def get_url(self, path: str) -> str:
         """Get a file:// URL for a local file path.
-        
+
         Args:
             path: Local filesystem path. Can be:
                   - Absolute path: /path/to/file.parquet
                   - Relative path: data/file.parquet (uses base_path if set)
                   - file:// URL: file:///path/to/file.parquet (returned as-is)
-        
+
         Returns:
             A file:// URL that DuckDB can read.
-        
+
         Examples:
             "/data/file.parquet" -> "file:///data/file.parquet"
             "file:///data/file.parquet" -> "file:///data/file.parquet"
@@ -62,12 +62,12 @@ class LocalStorageBackend(StorageBackend):
 
     def validate_connection(self) -> bool:
         """Validate local storage access.
-        
+
         For local storage, this checks if the base_path exists and is accessible.
-        
+
         Returns:
             True if validation succeeds.
-        
+
         Raises:
             ValueError: If base_path is set but doesn't exist or isn't a directory.
         """

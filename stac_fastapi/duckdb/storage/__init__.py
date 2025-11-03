@@ -11,7 +11,9 @@ __all__ = [
 ]
 
 try:
-    from stac_fastapi.duckdb.storage.azure import AzureBlobStorageBackend
+    from stac_fastapi.duckdb.storage.azure import (  # noqa: F401
+        AzureBlobStorageBackend,
+    )
 
     __all__.append("AzureBlobStorageBackend")
 except ImportError:

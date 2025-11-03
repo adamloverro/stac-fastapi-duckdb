@@ -1,4 +1,5 @@
 """DuckDB runtime configuration and data source mapping."""
+
 import json
 import logging
 import os
@@ -39,17 +40,21 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
 
     # Storage backend settings
     storage_type: str = os.getenv("STAC_STORAGE_STORAGE_TYPE", "local")
-    
+
     # Local storage settings
     local_data_path: Optional[str] = os.getenv("STAC_STORAGE_LOCAL_DATA_PATH")
-    
+
     # Azure Blob Storage settings
     azure_account_name: Optional[str] = os.getenv("STAC_STORAGE_AZURE_ACCOUNT_NAME")
     azure_container_name: Optional[str] = os.getenv("STAC_STORAGE_AZURE_CONTAINER_NAME")
-    azure_authentication: str = os.getenv("STAC_STORAGE_AZURE_AUTHENTICATION", "managed_identity")
-    azure_connection_string: Optional[str] = os.getenv("STAC_STORAGE_AZURE_CONNECTION_STRING")
+    azure_authentication: str = os.getenv(
+        "STAC_STORAGE_AZURE_AUTHENTICATION", "managed_identity"
+    )
+    azure_connection_string: Optional[str] = os.getenv(
+        "STAC_STORAGE_AZURE_CONNECTION_STRING"
+    )
     azure_sas_token: Optional[str] = os.getenv("STAC_STORAGE_AZURE_SAS_TOKEN")
-    
+
     _storage_backend: Optional[StorageBackend] = None
 
     def __init__(self, **data: Any) -> None:
@@ -61,10 +66,10 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
         # Only log a warning if it doesn't exist (don't fail initialization)
         if self.stac_file_path and not os.path.isdir(self.stac_file_path):
             logger.warning(f"STAC file path does not exist: {self.stac_file_path}")
-        
+
         # Initialize storage backend
         self._storage_backend = self._create_storage_backend()
-        
+
         # Validate storage backend connection
         try:
             self._storage_backend.validate_connection()
@@ -96,10 +101,10 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
         from stac_fastapi.duckdb.database_logic import DuckDBClient
 
         return DuckDBClient(settings=self)
-    
+
     def _create_storage_backend(self) -> StorageBackend:
         """Create and configure the storage backend.
-        
+
         Returns:
             Configured StorageBackend instance.
         """
@@ -112,7 +117,7 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
             azure_connection_string=self.azure_connection_string,
             azure_sas_token=self.azure_sas_token,
         )
-    
+
     @property
     def storage_backend(self) -> StorageBackend:
         """Get the storage backend instance."""
@@ -122,14 +127,14 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
 
     def get_collection_parquet_url(self, collection_id: str) -> str:
         """Get the Parquet URL for a collection.
-        
+
         This method returns a DuckDB-compatible URL by:
         1. Looking up the configured path/URL for the collection
         2. Transforming it through the storage backend to get a DuckDB-readable URL
-        
+
         Args:
             collection_id: The collection identifier.
-        
+
         Returns:
             A DuckDB-compatible URL (file://, https://, s3://, etc.).
         """
@@ -137,14 +142,17 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
             raise ValueError(
                 f"No Parquet URL configured for collection: {collection_id}"
             )
-        
+
         configured_path = self._parquet_urls[collection_id]
-        
+
         # If the path is already a complete URL (http://, https://, s3://, etc.),
         # return it as-is for backward compatibility
-        if any(configured_path.startswith(scheme) for scheme in ["http://", "https://", "s3://", "file://"]):
+        if any(
+            configured_path.startswith(scheme)
+            for scheme in ["http://", "https://", "s3://", "file://"]
+        ):
             return configured_path
-        
+
         # Otherwise, transform through storage backend
         return self.storage_backend.get_url(configured_path)
 
@@ -152,7 +160,7 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
         self, collection_ids: Optional[list[str]] = None
     ) -> list[tuple[str, str]]:
         """Get a list of (collection_id, parquet_url) tuples.
-        
+
         URLs are transformed through the storage backend to be DuckDB-compatible.
         """
         if not collection_ids:
@@ -162,7 +170,7 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
         for cid in collection_ids:
             if cid not in self._parquet_urls:
                 raise ValueError(f"No Parquet configured for collection '{cid}'")
-            
+
             # Get the DuckDB-compatible URL through storage backend
             url = self.get_collection_parquet_url(cid)
             sources.append((cid, url))

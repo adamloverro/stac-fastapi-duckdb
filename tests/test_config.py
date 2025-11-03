@@ -1,6 +1,7 @@
 """Tests for DuckDB configuration with storage backends."""
+
 import importlib.util
-import os
+
 import pytest
 
 from stac_fastapi.duckdb.config import DuckDBSettings
@@ -8,7 +9,7 @@ from stac_fastapi.duckdb.storage import LocalStorageBackend
 
 # Check if Azure dependencies are available
 try:
-    AZURE_AVAILABLE = importlib.util.find_spec('azure.storage.blob') is not None
+    AZURE_AVAILABLE = importlib.util.find_spec("azure.storage.blob") is not None
 except (ImportError, ModuleNotFoundError):
     AZURE_AVAILABLE = False
 
@@ -20,7 +21,7 @@ class TestDuckDBSettingsWithStorage:
         """Test that default settings create a local storage backend."""
         settings = DuckDBSettings(
             stac_file_path=str(tmp_path),
-            parquet_urls_json='{"test": "data/file.parquet"}'
+            parquet_urls_json='{"test": "data/file.parquet"}',
         )
         assert settings.storage_type == "local"
         assert isinstance(settings.storage_backend, LocalStorageBackend)
@@ -30,7 +31,7 @@ class TestDuckDBSettingsWithStorage:
         settings = DuckDBSettings(
             stac_file_path=str(tmp_path),
             storage_type="local",
-            parquet_urls_json='{"test": "data/file.parquet"}'
+            parquet_urls_json='{"test": "data/file.parquet"}',
         )
         url = settings.get_collection_parquet_url("test")
         assert url.startswith("file://")
@@ -41,7 +42,7 @@ class TestDuckDBSettingsWithStorage:
         settings = DuckDBSettings(
             stac_file_path=str(tmp_path),
             storage_type="local",
-            parquet_urls_json='{"test": "file:///absolute/path/file.parquet"}'
+            parquet_urls_json='{"test": "file:///absolute/path/file.parquet"}',
         )
         url = settings.get_collection_parquet_url("test")
         assert url == "file:///absolute/path/file.parquet"
@@ -51,7 +52,7 @@ class TestDuckDBSettingsWithStorage:
         settings = DuckDBSettings(
             stac_file_path=str(tmp_path),
             storage_type="local",
-            parquet_urls_json='{"test": "http://example.com/file.parquet"}'
+            parquet_urls_json='{"test": "http://example.com/file.parquet"}',
         )
         url = settings.get_collection_parquet_url("test")
         assert url == "http://example.com/file.parquet"
@@ -61,7 +62,7 @@ class TestDuckDBSettingsWithStorage:
         settings = DuckDBSettings(
             stac_file_path=str(tmp_path),
             storage_type="local",
-            parquet_urls_json='{"test": "https://example.com/file.parquet"}'
+            parquet_urls_json='{"test": "https://example.com/file.parquet"}',
         )
         url = settings.get_collection_parquet_url("test")
         assert url == "https://example.com/file.parquet"
@@ -71,7 +72,7 @@ class TestDuckDBSettingsWithStorage:
         settings = DuckDBSettings(
             stac_file_path=str(tmp_path),
             storage_type="local",
-            parquet_urls_json='{"test": "s3://bucket/file.parquet"}'
+            parquet_urls_json='{"test": "s3://bucket/file.parquet"}',
         )
         url = settings.get_collection_parquet_url("test")
         assert url == "s3://bucket/file.parquet"
@@ -81,7 +82,7 @@ class TestDuckDBSettingsWithStorage:
         settings = DuckDBSettings(
             stac_file_path=str(tmp_path),
             storage_type="local",
-            parquet_urls_json='{"coll1": "data/file1.parquet", "coll2": "data/file2.parquet"}'
+            parquet_urls_json='{"coll1": "data/file1.parquet", "coll2": "data/file2.parquet"}',
         )
         sources = settings.resolve_sources(["coll1", "coll2"])
         assert len(sources) == 2
@@ -101,7 +102,7 @@ class TestDuckDBSettingsWithStorage:
             azure_container_name="testcontainer",
             azure_authentication="sas_token",
             azure_sas_token="sv=2022-11-02&ss=b&srt=co&sp=r",
-            parquet_urls_json='{"test": "data/file.parquet"}'
+            parquet_urls_json='{"test": "data/file.parquet"}',
         )
         assert settings.storage_type == "azure_blob"
         assert settings.storage_backend.get_storage_type() == "azure_blob"
@@ -110,7 +111,7 @@ class TestDuckDBSettingsWithStorage:
         """Test that missing collection raises ValueError."""
         settings = DuckDBSettings(
             stac_file_path=str(tmp_path),
-            parquet_urls_json='{"test": "data/file.parquet"}'
+            parquet_urls_json='{"test": "data/file.parquet"}',
         )
         with pytest.raises(ValueError, match="No Parquet URL configured"):
             settings.get_collection_parquet_url("nonexistent")
