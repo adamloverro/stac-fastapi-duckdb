@@ -1,10 +1,8 @@
 """Local filesystem storage backend."""
 
 import logging
-import os
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote
 
 from stac_fastapi.duckdb.storage.base import StorageBackend
 
@@ -59,9 +57,8 @@ class LocalStorageBackend(StorageBackend):
         # Convert to absolute path
         abs_path = path_obj.resolve()
 
-        # Return file:// URL
-        # Use quote to handle special characters in path
-        return f"file://{abs_path}"
+        # Return file:// URL using as_uri() which properly handles encoding
+        return abs_path.as_uri()
 
     def validate_connection(self) -> bool:
         """Validate local storage access.

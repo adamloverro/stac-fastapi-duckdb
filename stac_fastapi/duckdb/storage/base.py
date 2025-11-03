@@ -55,6 +55,10 @@ class StorageBackend(ABC):
         """Get the type of storage backend.
         
         Returns:
-            A string identifier for the storage type (e.g., "local", "azure_blob", "s3").
+            A string identifier for the storage type.
+            
+        Note:
+            Subclasses should override this method to provide an explicit type identifier.
+            The default implementation derives it from the class name, which may be fragile.
         """
         return self.__class__.__name__.replace("StorageBackend", "").lower()
