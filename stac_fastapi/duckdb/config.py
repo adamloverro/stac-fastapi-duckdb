@@ -54,6 +54,9 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
         "STAC_STORAGE_AZURE_CONNECTION_STRING"
     )
     azure_sas_token: Optional[str] = os.getenv("STAC_STORAGE_AZURE_SAS_TOKEN")
+    azure_managed_identity_client_id: Optional[str] = os.getenv(
+        "STAC_STORAGE_AZURE_MANAGED_IDENTITY_CLIENT_ID"
+    )
 
     _storage_backend: Optional[StorageBackend] = None
 
@@ -116,6 +119,7 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
             azure_authentication=self.azure_authentication,
             azure_connection_string=self.azure_connection_string,
             azure_sas_token=self.azure_sas_token,
+            azure_managed_identity_client_id=self.azure_managed_identity_client_id,
         )
 
     @property
@@ -204,6 +208,10 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
             except Exception as e:
                 logger.warning(f"Failed to load httpfs extension: {str(e)}")
 
+            # Configure authentication for httpfs if using credential & token
+            # based access, e.g. azure managed identity
+            self._configure_authentication(conn)
+
             # Install and load spatial extension for geometry functions
             try:
                 conn.execute("INSTALL spatial;")
@@ -241,3 +249,93 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
                 conn.close()
             except Exception:
                 pass
+
+    def _configure_authentication(self, conn):
+        """Configure DuckDB connection for https authentication.
+
+        This method configures httpfs extension settings for authentication
+        when using token based credentials, e.g. azure managed identity.
+        For SAS token and connection string authentication,
+        the authentication is handled via the URL parameters.
+
+        Args:
+            conn: DuckDB connection object
+        """
+        # Only configure authentication for Azure storage backend with managed identity
+        if (
+            self.storage_type == "azure_blob"
+            and self.azure_authentication == "managed_identity"
+        ):
+
+            try:
+                # Import Azure dependencies
+                from azure.identity import (
+                    DefaultAzureCredential,
+                    ManagedIdentityCredential,
+                )
+
+                # Create credential instance matching the storage backend configuration
+                credential = None
+                if self.azure_managed_identity_client_id:
+                    try:
+                        credential = ManagedIdentityCredential(
+                            client_id=self.azure_managed_identity_client_id
+                        )
+                        logger.info(
+                            f"Using managed identity with client ID: {self.azure_managed_identity_client_id}"
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to create credential from managed identity with client ID: {e}"
+                        )
+                        credential = None
+
+                # Fall back to DefaultAzureCredential if specific client ID failed or not provided
+                if credential is None:
+                    credential = DefaultAzureCredential()
+                    logger.info(
+                        "Using DefaultAzureCredential for DuckDB authentication"
+                    )
+
+                # Get access token for Azure Storage
+                # Scope for Azure Storage is https://storage.azure.com/.default
+                token_response = credential.get_token(
+                    "https://storage.azure.com/.default"
+                )
+                access_token = token_response.token
+
+                # Configure DuckDB httpfs to use Bearer token authentication
+                # TODO: implement the azure blob storage extension for duckdb to handle this natively
+                # For now, we set a secret with the Authorization header
+                conn.execute(
+                    f"""CREATE SECRET http_auth ("
+                        TYPE http, 
+                        EXTRA_HTTP_HEADERS MAP {{
+                            'Authorization': 'Bearer {access_token}'
+                        }}
+                    );"""
+                )
+
+                # Alternative approach if the above doesn't work:
+                # Set HTTP headers for Azure blob requests
+                # This is discouraged for security reasons, but shown here for completeness
+                # conn.execute(f"SET http_timeout = 30000;")
+                # conn.execute(f"SET http_keep_alive = true;")
+                # conn.execute(f"SET http_custom_headers = 'Authorization=Bearer {access_token}';")
+
+                logger.info(
+                    "Successfully configured DuckDB with Azure managed identity token"
+                )
+
+            except ImportError:
+                logger.warning(
+                    "Azure identity dependencies not available. "
+                    "Install with: pip install azure-identity"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to configure Azure authentication for DuckDB: {str(e)}"
+                )
+                logger.warning(
+                    "DuckDB may not be able to access Azure Blob Storage without authentication"
+                )
