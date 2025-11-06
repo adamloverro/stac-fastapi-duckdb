@@ -19,6 +19,7 @@ def get_storage_backend(
     azure_authentication: str = "managed_identity",
     azure_connection_string: Optional[str] = None,
     azure_sas_token: Optional[str] = None,
+    azure_managed_identity_client_id: Optional[str] = None,
 ) -> StorageBackend:
     """Create storage backend instances.
 
@@ -30,6 +31,8 @@ def get_storage_backend(
         azure_authentication: Azure authentication method.
         azure_connection_string: Azure connection string.
         azure_sas_token: Azure SAS token.
+        azure_managed_identity_client_id: Azure managed identity client ID
+                                         (optional, for user-assigned managed identities).
 
     Returns:
         Configured StorageBackend instance.
@@ -66,6 +69,7 @@ def get_storage_backend(
             authentication=azure_authentication,
             connection_string=azure_connection_string,
             sas_token=azure_sas_token,
+            managed_identity_client_id=azure_managed_identity_client_id,
         )
 
     elif storage_type == "s3":

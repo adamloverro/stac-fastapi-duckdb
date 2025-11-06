@@ -291,6 +291,33 @@ make test-build
 make test
 ```
 
+### Azure Integration Testing
+
+The project includes comprehensive integration tests for Azure Blob Storage that test real connectivity and operations:
+
+```bash
+# Deploy Azure test infrastructure
+make azure-deploy
+
+# Run Azure integration tests
+make test-azure-integration
+
+# Check Azure infrastructure status
+make azure-status
+
+# Clean up Azure resources
+make azure-teardown
+```
+
+**Features:**
+- Tests real Azure Blob Storage connectivity (not mocked)
+- Supports both SAS token and managed identity authentication
+- Verifies DuckDB can read from Azure URLs
+- Infrastructure as Code using Azure Bicep templates
+- Automated deployment and teardown scripts
+
+For detailed setup and usage instructions, see [tests/integration/infrastructure/azure/README.md](tests/integration/infrastructure/azure/README.md).
+
 ### Running the Server
 
 You can run the server either locally or in Docker:

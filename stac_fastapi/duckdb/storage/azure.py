@@ -28,6 +28,7 @@ class AzureBlobStorageBackend(StorageBackend):
         authentication: str = "managed_identity",
         connection_string: Optional[str] = None,
         sas_token: Optional[str] = None,
+        managed_identity_client_id: Optional[str] = None,
     ):
         """Initialize Azure Blob Storage backend.
 
@@ -40,6 +41,8 @@ class AzureBlobStorageBackend(StorageBackend):
                            - "connection_string": Use a connection string
             connection_string: Azure storage connection string (if authentication="connection_string").
             sas_token: SAS token for authentication (if authentication="sas_token").
+            managed_identity_client_id: Client ID for managed identity authentication
+                                       (optional, if not provided uses system-assigned identity).
 
         Raises:
             ValueError: If required authentication parameters are missing.
@@ -58,6 +61,7 @@ class AzureBlobStorageBackend(StorageBackend):
         self.authentication = authentication
         self.connection_string = connection_string
         self.sas_token = sas_token
+        self.managed_identity_client_id = managed_identity_client_id
         self._blob_service_client: Optional[BlobServiceClient] = None
 
         # Validate authentication configuration
@@ -90,7 +94,7 @@ class AzureBlobStorageBackend(StorageBackend):
                 self.connection_string
             )
         elif self.authentication == "sas_token":
-            account_url = f"https://{self.account_name}.blob.core.windows.net"
+            account_url = "https://" + self.account_name + ".blob.core.windows.net"
             # SAS token should not have leading '?'
             sas_token = self.sas_token.lstrip("?") if self.sas_token else ""
             self._blob_service_client = BlobServiceClient(
@@ -98,14 +102,86 @@ class AzureBlobStorageBackend(StorageBackend):
                 credential=sas_token,
             )
         else:  # managed_identity
-            account_url = f"https://{self.account_name}.blob.core.windows.net"
-            credential = DefaultAzureCredential()
+            account_url = "https://" + self.account_name + ".blob.core.windows.net"
+            credential = None
+
+            # First try to use specific managed identity client ID if provided
+            if self.managed_identity_client_id:
+                try:
+                    from azure.identity import ManagedIdentityCredential
+
+                    credential = ManagedIdentityCredential(
+                        client_id=self.managed_identity_client_id
+                    )
+
+                    # Test credential availability before using it
+                    self._validate_managed_identity_credential(credential)
+                    logger.info(
+                        f"Using managed identity with client ID: {self.managed_identity_client_id}"
+                    )
+
+                except RuntimeError as e:
+                    logger.warning(
+                        f"Managed identity with client ID {self.managed_identity_client_id} is not available: {e}. "
+                        f"Falling back to DefaultAzureCredential."
+                    )
+                    credential = None
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to create managed identity credential with client ID {self.managed_identity_client_id}: {e}. "
+                        f"Falling back to DefaultAzureCredential."
+                    )
+                    credential = None
+
+                # If no specific client ID or managed identity failed, try DefaultAzureCredential
+                if credential is None:
+                    try:
+                        credential = DefaultAzureCredential()
+                        logger.info("Using DefaultAzureCredential for authentication")
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Failed to create any valid Azure credential. "
+                            f"Managed identity not available and DefaultAzureCredential failed: {e}"
+                        ) from e
+
             self._blob_service_client = BlobServiceClient(
                 account_url=account_url,
                 credential=credential,
             )
 
         return self._blob_service_client
+
+    def _validate_managed_identity_credential(self, credential) -> None:
+        """Validate that the managed identity credential is available.
+
+        This method attempts to get a token using the credential to verify
+        that the managed identity is accessible in the current environment.
+
+        Args:
+            credential: Azure credential object to validate
+
+        Raises:
+            RuntimeError: If managed identity is not available in the current environment
+        """
+        try:
+            # Try to get a token for Azure Storage scope
+            # This will fail immediately if IMDS is not available
+            credential.get_token("https://storage.azure.com/.default")
+            logger.debug("Managed identity credential validated successfully")
+        except Exception as e:
+            error_msg = str(e)
+            if (
+                "IMDS endpoint" in error_msg
+                or "ManagedIdentityCredential authentication unavailable" in error_msg
+            ):
+                raise RuntimeError(
+                    "Managed identity authentication is not available in this environment. "
+                    "This typically happens when running outside of Azure (e.g., locally). "
+                    "Consider using SAS token authentication instead."
+                ) from e
+            else:
+                # Re-raise other credential errors as-is
+                raise
 
     def get_url(self, path: str) -> str:
         """Get an HTTPS URL for Azure Blob Storage that DuckDB can read.
@@ -135,8 +211,12 @@ class AzureBlobStorageBackend(StorageBackend):
 
         # Base URL
         base_url = (
-            f"https://{self.account_name}.blob.core.windows.net/"
-            f"{self.container_name}/{encoded_path}"
+            "https://"
+            + self.account_name
+            + ".blob.core.windows.net/"
+            + self.container_name
+            + "/"
+            + encoded_path
         )
 
         # Add SAS token if using SAS authentication
@@ -168,8 +248,15 @@ class AzureBlobStorageBackend(StorageBackend):
             client = self._get_blob_service_client()
             container_client = client.get_container_client(self.container_name)
 
-            # Try to get container properties to verify access
-            container_client.get_container_properties()
+            # Try to list blobs to verify read/list access
+            # This is less privileged than get_container_properties
+            blob_list = container_client.list_blobs()
+            # Just try to get the first item or confirm iterator works
+            try:
+                next(iter(blob_list))
+            except StopIteration:
+                # Empty container is fine, we just verified access
+                pass
 
             logger.info(
                 f"Azure Blob Storage connection validated: "
