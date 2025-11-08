@@ -55,16 +55,43 @@ class DatabaseLogic:
 
     # Connection creation and source resolution are provided by settings
 
+    def _read_collection_from_parquet(self, parquet_path: str) -> Optional[dict]:
+        """Read STAC collection metadata from a GeoParquet file's metadata.
+        
+        Args:
+            parquet_path: Path to the collection's GeoParquet file
+            
+        Returns:
+            Collection dictionary or None if not found
+        """
+        try:
+            import pyarrow.parquet as pq
+            
+            # Read parquet file metadata
+            parquet_file = pq.ParquetFile(parquet_path)
+            metadata = parquet_file.schema_arrow.metadata
+            
+            if metadata and b'stac:collection' in metadata:
+                collection_json = metadata[b'stac:collection'].decode('utf-8')
+                return json.loads(collection_json)
+            
+            logger.warning(f"No 'stac:collection' metadata found in {parquet_path}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error reading collection metadata from {parquet_path}: {e}")
+            return None
+
     async def get_all_collections(
         self, token: Optional[str], limit: int, request: Request
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """
-        Retrieve a list of all collections from the MongoDB database, supporting pagination.
+        Retrieve a list of all collections from the collections registry GeoParquet.
 
         Args:
             token (Optional[str]): The pagination token, which is the ID of the last collection seen.
             limit (int): The maximum number of results to return.
-            base_url (str): The base URL for constructing fully qualified links.
+            request (Request): The request object for constructing fully qualified links.
 
         Returns:
             Tuple[List[Dict[str, Any]], Optional[str]]: A tuple containing a list of collections
@@ -72,21 +99,42 @@ class DatabaseLogic:
         """
         collections = []
 
-        if not os.path.exists(self.stac_file_path):
+        # Check for collections registry parquet file
+        collections_registry_path = os.path.join(self.stac_file_path, "collections.parquet")
+        
+        if not os.path.exists(collections_registry_path):
             raise HTTPException(
                 status_code=404,
-                detail=f"STAC_FILE_PATH directory not found at path: {self.stac_file_path}",
+                detail=f"Collections registry not found at {collections_registry_path}",
             )
 
-        # Iterate through each subdirectory under STAC_FILE_PATH to find collection.json files
-        for collection_name in os.listdir(self.stac_file_path):
-            collection_dir = os.path.join(self.stac_file_path, collection_name)
-            if os.path.isdir(collection_dir):
-                collection_json_path = os.path.join(collection_dir, "collection.json")
-                if os.path.exists(collection_json_path):
+        try:
+            # Read collections from registry using DuckDB
+            with self.settings.create_connection() as conn:
+                query = """
+                    SELECT collection_id, storage_location
+                    FROM read_parquet(?)
+                    WHERE storage_location IS NOT NULL
+                """
+                df = conn.execute(query, [collections_registry_path]).df()
+                
+                # For each collection in the registry, read its metadata from the parquet file
+                for _, row in df.iterrows():
+                    collection_id = row['collection_id']
+                    storage_location = row['storage_location']
+                    
+                    # Get full path to collection's parquet file
+                    parquet_path = os.path.join(self.stac_file_path, storage_location)
+                    
+                    if not os.path.exists(parquet_path):
+                        logger.warning(f"Collection parquet file not found: {parquet_path}")
+                        continue
+                    
                     try:
-                        with open(collection_json_path, "r") as json_file:
-                            collection = json.load(json_file)
+                        # Read collection metadata from parquet file metadata
+                        collection = self._read_collection_from_parquet(parquet_path)
+                        
+                        if collection:
                             serialized_collection = (
                                 self.collection_serializer.db_to_stac(
                                     collection,
@@ -95,11 +143,15 @@ class DatabaseLogic:
                                 )
                             )
                             collections.append(serialized_collection)
-                    except json.JSONDecodeError:
-                        print(f"Error decoding JSON from {collection_json_path}")
+                    except Exception as e:
+                        logger.warning(f"Error reading collection {collection_id}: {e}")
                         continue
-                else:
-                    continue  # Skip directories without a collection.json file
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error reading collections registry: {str(e)}",
+            )
 
         # Simulating pagination token
         next_token = None
@@ -108,10 +160,9 @@ class DatabaseLogic:
 
     async def find_collection(self, collection_id: str) -> dict:
         """
-        Find and return a collection from the database.
+        Find and return a collection from the collections registry.
 
         Args:
-            self: The instance of the object calling this function.
             collection_id (str): The ID of the collection to be found.
 
         Returns:
@@ -120,21 +171,48 @@ class DatabaseLogic:
         Raises:
             NotFoundError: If the collection with the given `collection_id` is not found in the database.
         """
-        collection_dir = os.path.join(self.stac_file_path, collection_id)
-        collection_json_path = os.path.join(collection_dir, "collection.json")
-
-        # Check if the collection.json file exists
-        if not os.path.exists(collection_json_path):
-            raise NotFoundError(f"Collection {collection_id} not found")
+        # Check collections registry
+        collections_registry_path = os.path.join(self.stac_file_path, "collections.parquet")
+        
+        if not os.path.exists(collections_registry_path):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Collections registry not found at {collections_registry_path}",
+            )
 
         try:
-            with open(collection_json_path, "r") as json_file:
-                collection = json.load(json_file)
+            # Query the collections registry for this collection
+            with self.settings.create_connection() as conn:
+                query = """
+                    SELECT collection_id, storage_location
+                    FROM read_parquet(?)
+                    WHERE collection_id = ? AND storage_location IS NOT NULL
+                """
+                df = conn.execute(query, [collections_registry_path, collection_id]).df()
+                
+                if df.empty:
+                    raise NotFoundError(f"Collection {collection_id} not found")
+                
+                storage_location = df.iloc[0]['storage_location']
+                parquet_path = os.path.join(self.stac_file_path, storage_location)
+                
+                if not os.path.exists(parquet_path):
+                    raise NotFoundError(f"Collection parquet file not found: {parquet_path}")
+                
+                # Read collection metadata from parquet file
+                collection = self._read_collection_from_parquet(parquet_path)
+                
+                if not collection:
+                    raise NotFoundError(f"Collection {collection_id} metadata not found in parquet file")
+                
                 return collection
-        except json.JSONDecodeError:
+                
+        except NotFoundError:
+            raise
+        except Exception as e:
             raise HTTPException(
                 status_code=500,
-                detail=f"Error decoding JSON from {collection_json_path}",
+                detail=f"Error reading collection {collection_id}: {str(e)}",
             )
 
     async def get_one_item(self, collection_id: str, item_id: str) -> dict:

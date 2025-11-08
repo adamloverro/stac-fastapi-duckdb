@@ -149,11 +149,24 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
 
         configured_path = self._parquet_urls[collection_id]
 
-        # If the path is already a complete URL (http://, https://, s3://, etc.),
-        # return it as-is for backward compatibility
+        # Handle file:// URLs - convert to plain path and process through storage backend
+        if configured_path.startswith("file://"):
+            # Remove file:// prefix and convert to path
+            # Handle both file://path and file:///path formats
+            path_without_scheme = configured_path[7:]  # Remove "file://"
+            if path_without_scheme.startswith("/"):
+                # file:///absolute/path -> /absolute/path
+                plain_path = path_without_scheme
+            else:
+                # file://./relative/path -> ./relative/path
+                plain_path = path_without_scheme
+            # Process through storage backend to get proper file:/// URL
+            return self.storage_backend.get_url(plain_path)
+
+        # If already a complete URL (http://, https://, s3://), return as-is
         if any(
             configured_path.startswith(scheme)
-            for scheme in ["http://", "https://", "s3://", "file://"]
+            for scheme in ["http://", "https://", "s3://"]
         ):
             return configured_path
 
