@@ -224,10 +224,35 @@ create_test_data() {
     # Upload all parquet files from stac_collections
     local uploaded_count=0
     
-    # Find and upload all .parquet files
+    # First, upload the collections registry if it exists
+    if [[ -f "${stac_collections_dir}/collections.parquet" ]]; then
+        print_status "Uploading collections registry..."
+        if az storage blob upload \
+            --account-name "$DEPLOYED_STORAGE_ACCOUNT" \
+            --container-name "$DEPLOYED_CONTAINER" \
+            --name "collections.parquet" \
+            --file "${stac_collections_dir}/collections.parquet" \
+            --overwrite \
+            --output none; then
+            print_success "✓ Uploaded: collections.parquet"
+            ((uploaded_count++))
+        else
+            print_error "✗ Failed to upload: collections.parquet"
+        fi
+    else
+        print_warning "Collections registry (collections.parquet) not found. Skipping..."
+    fi
+    
+    # Find and upload all .parquet files from subdirectories
     while IFS= read -r -d '' parquet_file; do
         local filename=$(basename "$parquet_file")
         local collection_name=$(basename "$(dirname "$parquet_file")")
+        
+        # Skip the root-level collections.parquet (already uploaded above)
+        if [[ "$filename" == "collections.parquet" && "$collection_name" == "stac_collections" ]]; then
+            continue
+        fi
+        
         local blob_name="collections/${collection_name}/${filename}"
         
         print_status "Uploading $filename from collection $collection_name..."
