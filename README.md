@@ -178,13 +178,27 @@ curl -X POST "http://localhost:8085/search" \
 #### Core Settings
 
 - `STAC_FILE_PATH` (optional, default: `/app/stac_collections`):
-  Directory containing STAC collection JSON files
+  Directory containing the collections registry (`collections.parquet`) and STAC collection data
 
 - `PARQUET_URLS_JSON` (required): JSON object mapping collection IDs to Parquet file paths/URLs
   - Local file example: `{"io-lulc-9-class": "file:///app/stac_collections/io-lulc-9-class/io-lulc-9-class.parquet"}`
   - Relative path example: `{"io-lulc-9-class": "data/io-lulc-9-class.parquet"}` (uses storage backend)
   - S3 example: `{"landsat": "s3://public-bucket/path/landsat.parquet"}`
   - When running with Docker, use container paths (e.g., `/app/stac_collections/...`)
+  
+#### Collection Management
+
+Collections are managed through a GeoParquet registry (`collections.parquet`) that indexes all available collections:
+
+- The registry contains metadata for each collection (id, title, storage location, spatial/temporal extents)
+- Collection metadata is stored in the GeoParquet file's metadata following the STAC GeoParquet specification
+- The API reads from the registry instead of scanning directories for JSON files
+- This enables efficient collection discovery and better support for cloud storage backends
+
+To create or update the collections registry:
+```bash
+python geoparquet/create_collections_registry.py
+```
 
 #### Storage Backend Settings
 
