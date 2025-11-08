@@ -327,8 +327,10 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
                 access_token = token_response.token
 
                 # Configure DuckDB httpfs to use Bearer token authentication
-                # TODO: implement the azure blob storage extension for duckdb to handle this natively
-                # For now, we set a secret with the Authorization header
+                # TODO: Consider using DuckDB's native 'azure' extension instead of httpfs with manual authentication.
+                # This would allow using: INSTALL azure; LOAD azure; and configuring via SET azure_storage_connection_string.
+                # If the 'azure' extension does not support managed identity, clarify why the current httpfs approach is preferred.
+                # For now, we set a secret with the Authorization header.
                 conn.execute(
                     f"""CREATE SECRET http_auth (
                         TYPE http, 
