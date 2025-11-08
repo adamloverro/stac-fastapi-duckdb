@@ -28,13 +28,13 @@ def configure_logging():
     # Convert string to logging level
     numeric_level = getattr(logging, log_level, logging.INFO)
 
-    # Configure root logger
-    logging.basicConfig(
-        level=numeric_level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        force=True,  # Override any existing configuration
-    )
+    # Configure root logger only if no handlers are present
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=numeric_level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
 
     # Set specific logger levels for key components
     logging.getLogger("stac_fastapi.duckdb").setLevel(numeric_level)
