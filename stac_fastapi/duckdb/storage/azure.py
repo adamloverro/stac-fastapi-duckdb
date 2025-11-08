@@ -53,7 +53,7 @@ class AzureBlobStorageBackend(StorageBackend):
         except ImportError as e:
             raise ImportError(
                 "Azure storage dependencies not installed. "
-                "Install with: pip install azure-storage-blob azure-identity adlfs"
+                "Install with: pip install azure-storage-blob azure-identity"
             ) from e
 
         self.account_name = account_name
