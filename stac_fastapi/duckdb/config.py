@@ -308,21 +308,21 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
                         credential = None
 
                 # Fall back to DefaultAzureCredential if specific client ID failed or not provided
-                if credential is None:
-                    try:
-                        credential = DefaultAzureCredential()
-                        logger.info(
-                            "Using DefaultAzureCredential for DuckDB authentication"
-                        )
-                        # Retrieve access token
-                        token_response = credential.get_token(storage_scope)
-                        logger.info(
-                            "Successfully retrieved access token using DefaultAzureCredential"
-                        )
-                    except Exception as e:
-                        raise RuntimeError(
-                            f"Failed to create DefaultAzureCredential: {e}"
-                        )
+            if credential is None:
+                try:
+                    credential = DefaultAzureCredential()
+                    logger.info(
+                        "Using DefaultAzureCredential for DuckDB authentication"
+                    )
+                    # Retrieve access token
+                    token_response = credential.get_token(storage_scope)
+                    logger.info(
+                        "Successfully retrieved access token using DefaultAzureCredential"
+                    )
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to create DefaultAzureCredential: {e}"
+                    )
 
                 access_token = token_response.token
 
