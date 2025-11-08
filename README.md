@@ -271,9 +271,7 @@ PARQUET_URLS_JSON='{"collection1": "path/to/collection1.parquet"}'
 ```bash
 pip install -e .[azure]
 # or manually:
-pip install azure-storage-blob azure-identity adlfs
-```
-
+pip install azure-storage-blob azure-identity
 ## Development
 
 ### Running Tests
