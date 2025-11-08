@@ -72,9 +72,17 @@ def test_collection() -> Dict:
 @pytest.fixture
 def settings():
     """DuckDB settings for testing with real GeoParquet file."""
+    # Use the actual test data directory
+    test_dir = os.path.dirname(__file__)
+    project_root = os.path.dirname(test_dir)
+    stac_collections = os.path.join(project_root, "stac_collections")
+    parquet_file = os.path.join(
+        stac_collections, "io-lulc-9-class", "io-lulc-9-class.parquet"
+    )
+
     return DuckDBSettings(
-        parquet_urls_json='{"io-lulc-9-class": "/app/stac_collections/io-lulc-9-class/io-lulc-9-class.parquet"}',
-        stac_file_path="/app/stac_collections",
+        parquet_urls_json=f'{{"io-lulc-9-class": "{parquet_file}"}}',
+        stac_file_path=stac_collections,
     )
 
 

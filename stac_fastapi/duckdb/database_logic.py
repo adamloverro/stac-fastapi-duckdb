@@ -822,6 +822,7 @@ class DatabaseLogic:
 
         # Resolve sources for the collections
         sources = self.settings.resolve_sources(collection_ids)
+        logger.info(f"Resolved sources for collections: {sources}")
 
         # Basic filters
         item_ids: Optional[List[str]] = (
@@ -867,7 +868,11 @@ class DatabaseLogic:
                 sample_url = sources[0][1] if sources else None
                 available_cols: List[str] = []
                 if sample_url:
+                    # TODO: create_connection is called twice in this function, causing
+                    # the same duckdb extensions to be loaded twice - optimize
                     with self.settings.create_connection() as _conn:
+                        # TODO: these duckdb calls can be timeconsuming; implement metrics later to track
+                        # performance impact in deployment
                         df_cols = (
                             _conn.execute(
                                 "SELECT * FROM read_parquet(?) LIMIT 0", [sample_url]

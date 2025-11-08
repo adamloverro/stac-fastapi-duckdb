@@ -1,5 +1,6 @@
 """FastAPI application."""
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -18,6 +19,35 @@ from stac_fastapi.extensions.core.filter import FilterConformanceClasses
 from stac_fastapi.duckdb.config import DuckDBSettings
 from stac_fastapi.duckdb.database_logic import DatabaseLogic
 from stac_fastapi.duckdb.filter_client import DuckDBFilterClient
+
+
+def configure_logging():
+    """Configure logging for the application."""
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+
+    # Convert string to logging level
+    numeric_level = getattr(logging, log_level, logging.INFO)
+
+    # Configure root logger only if no handlers are present
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=numeric_level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+
+    # Set specific logger levels for key components
+    logging.getLogger("stac_fastapi.duckdb").setLevel(numeric_level)
+    logging.getLogger("uvicorn").setLevel(numeric_level)
+
+    # Optionally quiet down some noisy loggers
+    if numeric_level > logging.DEBUG:
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+        logging.getLogger("azure").setLevel(logging.WARNING)
+
+
+# Initialize logging configuration
+configure_logging()
 
 settings = DuckDBSettings()
 session = Session.create_from_settings(settings)

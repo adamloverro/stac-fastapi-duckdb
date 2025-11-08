@@ -1,0 +1,7 @@
+# Generated files from deployment
+.env.azure
+deployment-output.json
+
+# Temporary files
+*.tmp
+*.log
