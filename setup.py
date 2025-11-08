@@ -32,7 +32,6 @@ extra_reqs = {
     "docs": ["mkdocs", "mkdocs-material", "pdocs"],
     "server": ["uvicorn[standard]==0.19.0"],
     "azure": [
-        "adlfs>=2023.8.0",
         "azure-storage-blob>=12.19.0",
         "azure-identity>=1.15.0",
     ],
