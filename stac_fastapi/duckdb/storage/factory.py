@@ -52,7 +52,7 @@ def get_storage_backend(
         except ImportError as e:
             raise ImportError(
                 "Azure storage backend requires additional dependencies. "
-                "Install with: pip install azure-storage-blob azure-identity adlfs"
+                "Install with: pip install azure-storage-blob azure-identity"
             ) from e
 
         if not azure_account_name:
