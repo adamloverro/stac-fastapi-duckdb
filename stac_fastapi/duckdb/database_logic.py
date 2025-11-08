@@ -822,6 +822,7 @@ class DatabaseLogic:
 
         # Resolve sources for the collections
         sources = self.settings.resolve_sources(collection_ids)
+        logger.info(f"Resolved sources for collections: {sources}")
 
         # Basic filters
         item_ids: Optional[List[str]] = (

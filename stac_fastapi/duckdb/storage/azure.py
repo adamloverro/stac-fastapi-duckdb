@@ -123,21 +123,22 @@ class AzureBlobStorageBackend(StorageBackend):
                 except RuntimeError as e:
                     logger.warning(
                         f"Managed identity with client ID {self.managed_identity_client_id} is not available: {e}. "
-                        f"Falling back to DefaultAzureCredential."
+                        f"Runtime: Falling back to DefaultAzureCredential."
                     )
                     credential = None
                 except Exception as e:
                     logger.warning(
                         f"Failed to create managed identity credential with client ID {self.managed_identity_client_id}: {e}. "
-                        f"Falling back to DefaultAzureCredential."
+                        f"Exception: Falling back to DefaultAzureCredential."
                     )
                     credential = None
 
                 # If no specific client ID or managed identity failed, try DefaultAzureCredential
                 if credential is None:
                     try:
-                        credential = DefaultAzureCredential()
                         logger.info("Using DefaultAzureCredential for authentication")
+                        credential = DefaultAzureCredential()
+                        logger.info("DefaultAzureCredential created successfully")
                     except Exception as e:
                         raise RuntimeError(
                             f"Failed to create any valid Azure credential. "

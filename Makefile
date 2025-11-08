@@ -36,7 +36,7 @@ up-local: ## Run the FastAPI app locally without Docker
 	@echo "Starting STAC FastAPI DuckDB server locally..."
 	@echo "Server will be available at: http://localhost:8000"
 	@echo "Press Ctrl+C to stop"
-	$(LOCAL_ENV) python -m stac_fastapi.duckdb.app
+	$(LOCAL_ENV) LOG_LEVEL="INFO" python -m stac_fastapi.duckdb.app
 
 test-local: ## Run pytest test suite locally
 	@echo "Running local tests..."
@@ -164,3 +164,138 @@ azure-dry-run: ## Show what Azure resources would be deleted (dry run)
 		exit 1; \
 	fi
 	@cd "$(AZURE_INFRA_DIR)" && ./teardown.sh --dry-run
+
+# --- Azure Integration End-to-End Testing ---
+
+up-local-azure-backend: ## Run STAC FastAPI DuckDB locally with Azure managed identity backend
+	@echo "Starting STAC FastAPI DuckDB server locally with Azure managed identity backend..."
+	@if [ ! -f "$(AZURE_INFRA_DIR)/.env.azure" ]; then \
+		echo "Error: Azure environment file not found."; \
+		echo "Please deploy Azure infrastructure first: make azure-deploy"; \
+		exit 1; \
+	fi
+	@echo "Loading Azure environment variables..."
+	@echo "Server will be available at: http://localhost:8000"
+	@echo "Press Ctrl+C to stop"
+	@source "$(AZURE_INFRA_DIR)/.env.azure" && \
+	export STAC_FILE_PATH="$(STAC_DIR)" && \
+	export PARQUET_URLS_JSON='{"io-lulc-9-class":"collections/io-lulc-9-class/io-lulc-9-class.parquet"}' && \
+	export STAC_STORAGE_STORAGE_TYPE="azure_blob" && \
+	export STAC_STORAGE_AZURE_ACCOUNT_NAME="$$AZURE_STORAGE_ACCOUNT" && \
+	export STAC_STORAGE_AZURE_CONTAINER_NAME="$$AZURE_TEST_CONTAINER" && \
+	export STAC_STORAGE_AZURE_AUTHENTICATION="managed_identity" && \
+	export STAC_STORAGE_AZURE_MANAGED_IDENTITY_CLIENT_ID="$$AZURE_CLIENT_ID" && \
+	export LOG_LEVEL="INFO" && \
+	python -m stac_fastapi.duckdb.app
+
+up-azure-backend: ## Run STAC FastAPI DuckDB in Docker with Azure managed identity backend
+	@echo "Starting STAC FastAPI DuckDB in Docker with Azure managed identity backend..."
+	@if [ ! -f "$(AZURE_INFRA_DIR)/.env.azure" ]; then \
+		echo "Error: Azure environment file not found."; \
+		echo "Please deploy Azure infrastructure first: make azure-deploy"; \
+		exit 1; \
+	fi
+	@echo "Loading Azure environment variables and starting Docker container..."
+	@echo "Server will be available at: http://localhost:8085"
+	@source "$(AZURE_INFRA_DIR)/.env.azure" && \
+	export STAC_FILE_PATH="$(STAC_DIR)" && \
+	export PARQUET_URLS_JSON='{"io-lulc-9-class":"collections/io-lulc-9-class/io-lulc-9-class.parquet"}' && \
+	export STAC_STORAGE_STORAGE_TYPE="azure_blob" && \
+	export STAC_STORAGE_AZURE_ACCOUNT_NAME="$$AZURE_STORAGE_ACCOUNT" && \
+	export STAC_STORAGE_AZURE_CONTAINER_NAME="$$AZURE_TEST_CONTAINER" && \
+	export STAC_STORAGE_AZURE_AUTHENTICATION="managed_identity" && \
+	export STAC_STORAGE_AZURE_MANAGED_IDENTITY_CLIENT_ID="$$AZURE_CLIENT_ID" && \
+	export LOG_LEVEL="INFO" && \
+	docker compose up
+
+up-azure-backend-d: ## Run STAC FastAPI DuckDB in Docker detached with Azure managed identity backend
+	@echo "Starting STAC FastAPI DuckDB in Docker (detached) with Azure managed identity backend..."
+	@if [ ! -f "$(AZURE_INFRA_DIR)/.env.azure" ]; then \
+		echo "Error: Azure environment file not found."; \
+		echo "Please deploy Azure infrastructure first: make azure-deploy"; \
+		exit 1; \
+	fi
+	@echo "Loading Azure environment variables and starting Docker container (detached)..."
+	@echo "Server will be available at: http://localhost:8085"
+	@source "$(AZURE_INFRA_DIR)/.env.azure" && \
+	export STAC_FILE_PATH="$(STAC_DIR)" && \
+	export PARQUET_URLS_JSON='{"io-lulc-9-class":"collections/io-lulc-9-class/io-lulc-9-class.parquet"}' && \
+	export STAC_STORAGE_STORAGE_TYPE="azure_blob" && \
+	export STAC_STORAGE_AZURE_ACCOUNT_NAME="$$AZURE_STORAGE_ACCOUNT" && \
+	export STAC_STORAGE_AZURE_CONTAINER_NAME="$$AZURE_TEST_CONTAINER" && \
+	export STAC_STORAGE_AZURE_AUTHENTICATION="managed_identity" && \
+	export STAC_STORAGE_AZURE_MANAGED_IDENTITY_CLIENT_ID="$$AZURE_CLIENT_ID" && \
+	export LOG_LEVEL="INFO" && \
+	docker compose up -d
+
+up-local-azure-sas: ## Run STAC FastAPI DuckDB locally with Azure SAS token backend  
+	@echo "Starting STAC FastAPI DuckDB server locally with Azure SAS token backend..."
+	@if [ ! -f "$(AZURE_INFRA_DIR)/.env.azure" ]; then \
+		echo "Error: Azure environment file not found."; \
+		echo "Please deploy Azure infrastructure first: make azure-deploy"; \
+		exit 1; \
+	fi
+	@echo "Loading Azure environment variables..."
+	@echo "Server will be available at: http://localhost:8000"
+	@echo "Press Ctrl+C to stop"
+	@source "$(AZURE_INFRA_DIR)/.env.azure" && \
+	export STAC_FILE_PATH="$(STAC_DIR)" && \
+	export PARQUET_URLS_JSON='{"io-lulc-9-class":"collections/io-lulc-9-class/io-lulc-9-class.parquet"}' && \
+	export STAC_STORAGE_STORAGE_TYPE="azure_blob" && \
+	export STAC_STORAGE_AZURE_ACCOUNT_NAME="$$AZURE_STORAGE_ACCOUNT" && \
+	export STAC_STORAGE_AZURE_CONTAINER_NAME="$$AZURE_TEST_CONTAINER" && \
+	export STAC_STORAGE_AZURE_AUTHENTICATION="sas_token" && \
+	export STAC_STORAGE_AZURE_SAS_TOKEN="$$AZURE_SAS_TOKEN" && \
+	export LOG_LEVEL="INFO" && \
+	python -m stac_fastapi.duckdb.app
+
+up-azure-sas: ## Run STAC FastAPI DuckDB in Docker with Azure SAS token backend
+	@echo "Starting STAC FastAPI DuckDB in Docker with Azure SAS token backend..."
+	@if [ ! -f "$(AZURE_INFRA_DIR)/.env.azure" ]; then \
+		echo "Error: Azure environment file not found."; \
+		echo "Please deploy Azure infrastructure first: make azure-deploy"; \
+		exit 1; \
+	fi
+	@echo "Loading Azure environment variables and starting Docker container..."
+	@echo "Server will be available at: http://localhost:8085"
+	@source "$(AZURE_INFRA_DIR)/.env.azure" && \
+	export STAC_FILE_PATH="$(STAC_DIR)" && \
+	export PARQUET_URLS_JSON='{"io-lulc-9-class":"collections/io-lulc-9-class/io-lulc-9-class.parquet"}' && \
+	export STAC_STORAGE_STORAGE_TYPE="azure_blob" && \
+	export STAC_STORAGE_AZURE_ACCOUNT_NAME="$$AZURE_STORAGE_ACCOUNT" && \
+	export STAC_STORAGE_AZURE_CONTAINER_NAME="$$AZURE_TEST_CONTAINER" && \
+	export STAC_STORAGE_AZURE_AUTHENTICATION="sas_token" && \
+	export STAC_STORAGE_AZURE_SAS_TOKEN="$$AZURE_SAS_TOKEN" && \
+	export LOG_LEVEL="INFO" && \
+	docker compose up
+
+azure-backend-help: ## Show Azure backend deployment options and their usage
+	@echo "Azure Backend Deployment Options"
+	@echo "================================="
+	@echo
+	@echo "Available targets:"
+	@echo "  up-local-azure-backend    - Run locally with Azure managed identity backend"
+	@echo "  up-azure-backend          - Run in Docker with Azure managed identity backend"
+	@echo "  up-azure-backend-d        - Run in Docker (detached) with Azure managed identity backend"
+	@echo "  up-local-azure-sas        - Run locally with Azure SAS token backend"
+	@echo "  up-azure-sas              - Run in Docker with Azure SAS token backend"
+	@echo
+	@echo "Prerequisites:"
+	@echo "  1. Deploy Azure infrastructure: make azure-deploy"
+	@echo "  2. Ensure Azure environment file exists: $(AZURE_INFRA_DIR)/.env.azure"
+	@echo
+	@echo "Authentication methods:"
+	@echo "  • Managed Identity: Uses DefaultAzureCredential (works locally with Azure CLI)"
+	@echo "  • SAS Token: Uses pre-generated token (works everywhere, expires in 30 days)"
+	@echo
+	@echo "Current Azure infrastructure status:"
+	@if [ -f "$(AZURE_INFRA_DIR)/.env.azure" ]; then \
+		echo "  ✓ Azure environment file found"; \
+		source "$(AZURE_INFRA_DIR)/.env.azure" && \
+		echo "    Storage Account: $$AZURE_STORAGE_ACCOUNT" && \
+		echo "    Container: $$AZURE_TEST_CONTAINER" && \
+		echo "    Resource Group: $$AZURE_RESOURCE_GROUP_NAME"; \
+	else \
+		echo "  ✗ Azure environment file not found"; \
+		echo "    Run 'make azure-deploy' to create Azure infrastructure"; \
+	fi

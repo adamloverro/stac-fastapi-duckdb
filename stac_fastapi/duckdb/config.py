@@ -276,14 +276,31 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
 
                 # Create credential instance matching the storage backend configuration
                 credential = None
+                storage_scope = "https://storage.azure.com/.default"
+
                 if self.azure_managed_identity_client_id:
                     try:
+                        logger.info(
+                            f"Using managed identity with client ID: {self.azure_managed_identity_client_id}"
+                        )
+
                         credential = ManagedIdentityCredential(
                             client_id=self.azure_managed_identity_client_id
                         )
                         logger.info(
-                            f"Using managed identity with client ID: {self.azure_managed_identity_client_id}"
+                            "Successfully created ManagedIdentityCredential with client ID"
                         )
+                        # Try to retrieve a token to validate the credential
+                        token_response = credential.get_token(storage_scope)
+                        logger.info(
+                            "Successfully retrieved access token using managed identity client ID"
+                        )
+                    except RuntimeError as e:
+                        logger.warning(
+                            f"Managed identity with client ID {self.azure_managed_identity_client_id} is not available: {e}"
+                        )
+                        credential = None
+
                     except Exception as e:
                         logger.warning(
                             f"Failed to create credential from managed identity with client ID: {e}"
@@ -292,30 +309,35 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
 
                 # Fall back to DefaultAzureCredential if specific client ID failed or not provided
                 if credential is None:
-                    credential = DefaultAzureCredential()
-                    logger.info(
-                        "Using DefaultAzureCredential for DuckDB authentication"
-                    )
+                    try:
+                        credential = DefaultAzureCredential()
+                        logger.info(
+                            "Using DefaultAzureCredential for DuckDB authentication"
+                        )
+                        # Retrieve access token
+                        token_response = credential.get_token(storage_scope)
+                        logger.info(
+                            "Successfully retrieved access token using DefaultAzureCredential"
+                        )
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Failed to create DefaultAzureCredential: {e}"
+                        )
 
-                # Get access token for Azure Storage
-                # Scope for Azure Storage is https://storage.azure.com/.default
-                token_response = credential.get_token(
-                    "https://storage.azure.com/.default"
-                )
                 access_token = token_response.token
 
                 # Configure DuckDB httpfs to use Bearer token authentication
                 # TODO: implement the azure blob storage extension for duckdb to handle this natively
                 # For now, we set a secret with the Authorization header
                 conn.execute(
-                    f"""CREATE SECRET http_auth ("
+                    f"""CREATE SECRET http_auth (
                         TYPE http, 
                         EXTRA_HTTP_HEADERS MAP {{
-                            'Authorization': 'Bearer {access_token}'
+                            'Authorization': 'Bearer {access_token}',
+                            'x-ms-version': '2025-11-05'
                         }}
                     );"""
                 )
-
                 # Alternative approach if the above doesn't work:
                 # Set HTTP headers for Azure blob requests
                 # This is discouraged for security reasons, but shown here for completeness
