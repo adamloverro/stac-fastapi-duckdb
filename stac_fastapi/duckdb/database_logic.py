@@ -57,27 +57,27 @@ class DatabaseLogic:
 
     def _read_collection_from_parquet(self, parquet_path: str) -> Optional[dict]:
         """Read STAC collection metadata from a GeoParquet file's metadata.
-        
+
         Args:
             parquet_path: Path to the collection's GeoParquet file
-            
+
         Returns:
             Collection dictionary or None if not found
         """
         try:
             import pyarrow.parquet as pq
-            
+
             # Read parquet file metadata
             parquet_file = pq.ParquetFile(parquet_path)
             metadata = parquet_file.schema_arrow.metadata
-            
-            if metadata and b'stac:collection' in metadata:
-                collection_json = metadata[b'stac:collection'].decode('utf-8')
+
+            if metadata and b"stac:collection" in metadata:
+                collection_json = metadata[b"stac:collection"].decode("utf-8")
                 return json.loads(collection_json)
-            
+
             logger.warning(f"No 'stac:collection' metadata found in {parquet_path}")
             return None
-            
+
         except Exception as e:
             logger.error(f"Error reading collection metadata from {parquet_path}: {e}")
             return None
@@ -100,8 +100,10 @@ class DatabaseLogic:
         collections = []
 
         # Check for collections registry parquet file
-        collections_registry_path = os.path.join(self.stac_file_path, "collections.parquet")
-        
+        collections_registry_path = os.path.join(
+            self.stac_file_path, "collections.parquet"
+        )
+
         if not os.path.exists(collections_registry_path):
             raise HTTPException(
                 status_code=404,
@@ -117,23 +119,25 @@ class DatabaseLogic:
                     WHERE storage_location IS NOT NULL
                 """
                 df = conn.execute(query, [collections_registry_path]).df()
-                
+
                 # For each collection in the registry, read its metadata from the parquet file
                 for _, row in df.iterrows():
-                    collection_id = row['collection_id']
-                    storage_location = row['storage_location']
-                    
+                    collection_id = row["collection_id"]
+                    storage_location = row["storage_location"]
+
                     # Get full path to collection's parquet file
                     parquet_path = os.path.join(self.stac_file_path, storage_location)
-                    
+
                     if not os.path.exists(parquet_path):
-                        logger.warning(f"Collection parquet file not found: {parquet_path}")
+                        logger.warning(
+                            f"Collection parquet file not found: {parquet_path}"
+                        )
                         continue
-                    
+
                     try:
                         # Read collection metadata from parquet file metadata
                         collection = self._read_collection_from_parquet(parquet_path)
-                        
+
                         if collection:
                             serialized_collection = (
                                 self.collection_serializer.db_to_stac(
@@ -172,8 +176,10 @@ class DatabaseLogic:
             NotFoundError: If the collection with the given `collection_id` is not found in the database.
         """
         # Check collections registry
-        collections_registry_path = os.path.join(self.stac_file_path, "collections.parquet")
-        
+        collections_registry_path = os.path.join(
+            self.stac_file_path, "collections.parquet"
+        )
+
         if not os.path.exists(collections_registry_path):
             raise HTTPException(
                 status_code=404,
@@ -188,25 +194,31 @@ class DatabaseLogic:
                     FROM read_parquet(?)
                     WHERE collection_id = ? AND storage_location IS NOT NULL
                 """
-                df = conn.execute(query, [collections_registry_path, collection_id]).df()
-                
+                df = conn.execute(
+                    query, [collections_registry_path, collection_id]
+                ).df()
+
                 if df.empty:
                     raise NotFoundError(f"Collection {collection_id} not found")
-                
-                storage_location = df.iloc[0]['storage_location']
+
+                storage_location = df.iloc[0]["storage_location"]
                 parquet_path = os.path.join(self.stac_file_path, storage_location)
-                
+
                 if not os.path.exists(parquet_path):
-                    raise NotFoundError(f"Collection parquet file not found: {parquet_path}")
-                
+                    raise NotFoundError(
+                        f"Collection parquet file not found: {parquet_path}"
+                    )
+
                 # Read collection metadata from parquet file
                 collection = self._read_collection_from_parquet(parquet_path)
-                
+
                 if not collection:
-                    raise NotFoundError(f"Collection {collection_id} metadata not found in parquet file")
-                
+                    raise NotFoundError(
+                        f"Collection {collection_id} metadata not found in parquet file"
+                    )
+
                 return collection
-                
+
         except NotFoundError:
             raise
         except Exception as e:

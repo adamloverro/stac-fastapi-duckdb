@@ -271,23 +271,29 @@ class TestAzureIntegration:
             result = conn.execute(
                 f"SELECT collection_id, title, storage_location FROM read_parquet('{collections_url}')"
             ).fetchall()
-            
+
             # Verify we can read the registry
-            assert len(result) > 0, "Collections registry should contain at least one collection"
-            
+            assert (
+                len(result) > 0
+            ), "Collections registry should contain at least one collection"
+
             # Verify the expected collection exists
             collection_ids = [row[0] for row in result]
-            assert "io-lulc-9-class" in collection_ids, "io-lulc-9-class should be in registry"
-            
+            assert (
+                "io-lulc-9-class" in collection_ids
+            ), "io-lulc-9-class should be in registry"
+
             print(f"Successfully read {len(result)} collections from Azure registry")
-            
+
         except Exception as e:
             # If file doesn't exist, that's expected
             if "No such file or directory" in str(e) or "HTTP Error 404" in str(e):
                 pytest.skip(f"Collections registry missing in Azure container: {e}")
             else:
                 # Other errors might indicate real connectivity issues
-                pytest.fail(f"DuckDB failed to read collections registry from Azure: {e}")
+                pytest.fail(
+                    f"DuckDB failed to read collections registry from Azure: {e}"
+                )
         finally:
             conn.close()
 
