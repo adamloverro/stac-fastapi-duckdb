@@ -129,12 +129,44 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
             self._storage_backend = self._create_storage_backend()
         return self._storage_backend
 
+    def _read_collections_from_registry(self) -> Dict[str, str]:
+        """Read collection storage locations from collections.parquet registry.
+        
+        Returns:
+            Dictionary mapping collection_id to storage_location (relative path).
+            Returns empty dict if registry doesn't exist.
+        """
+        collections_registry_path = os.path.join(self.stac_file_path, "collections.parquet")
+        
+        if not os.path.exists(collections_registry_path):
+            logger.debug(f"Collections registry not found at {collections_registry_path}, using PARQUET_URLS_JSON")
+            return {}
+        
+        try:
+            with self.create_connection() as conn:
+                query = """
+                    SELECT collection_id, storage_location
+                    FROM read_parquet(?)
+                    WHERE storage_location IS NOT NULL
+                """
+                result = conn.execute(query, [collections_registry_path]).fetchall()
+                
+                # Convert to dictionary: collection_id -> storage_location
+                registry_map = {row[0]: row[1] for row in result}
+                logger.info(f"Loaded {len(registry_map)} collections from registry")
+                return registry_map
+                
+        except Exception as e:
+            logger.warning(f"Error reading collections registry: {e}")
+            return {}
+
     def get_collection_parquet_url(self, collection_id: str) -> str:
         """Get the Parquet URL for a collection.
 
         This method returns a DuckDB-compatible URL by:
-        1. Looking up the configured path/URL for the collection
-        2. Transforming it through the storage backend to get a DuckDB-readable URL
+        1. First checking the collections.parquet registry
+        2. Falling back to PARQUET_URLS_JSON if registry doesn't exist
+        3. Transforming the path through the storage backend to get a DuckDB-readable URL
 
         Args:
             collection_id: The collection identifier.
@@ -142,12 +174,34 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
         Returns:
             A DuckDB-compatible URL (file://, https://, s3://, etc.).
         """
+        # Try to get from registry first
+        registry_map = self._read_collections_from_registry()
+        
+        if collection_id in registry_map:
+            # Use storage_location from registry
+            storage_location = registry_map[collection_id]
+            logger.debug(f"Using registry location for {collection_id}: {storage_location}")
+            
+            # For cloud storage (Azure), the path is already in the correct format
+            # For local storage, we need to join with stac_file_path
+            if self.storage_type == "local":
+                # Local storage: join with base path
+                full_path = os.path.join(self.stac_file_path, storage_location)
+            else:
+                # Cloud storage (Azure, S3, etc.): use path as-is
+                full_path = storage_location
+            
+            # Transform through storage backend to get DuckDB-compatible URL
+            return self.storage_backend.get_url(full_path)
+        
+        # Fallback to PARQUET_URLS_JSON for backward compatibility
         if collection_id not in self._parquet_urls:
             raise ValueError(
                 f"No Parquet URL configured for collection: {collection_id}"
             )
 
         configured_path = self._parquet_urls[collection_id]
+        logger.debug(f"Using PARQUET_URLS_JSON for {collection_id}: {configured_path}")
 
         # Handle file:// URLs - convert to plain path and process through storage backend
         if configured_path.startswith("file://"):
@@ -179,16 +233,27 @@ class DuckDBSettings(ApiSettings, ApiBaseSettings):
         """Get a list of (collection_id, parquet_url) tuples.
 
         URLs are transformed through the storage backend to be DuckDB-compatible.
+        First checks collections.parquet registry, then falls back to PARQUET_URLS_JSON.
         """
+        # Try to get from registry first
+        registry_map = self._read_collections_from_registry()
+        
         if not collection_ids:
-            collection_ids = list(self._parquet_urls.keys())
+            # If no specific collections requested, use all from registry or fallback
+            if registry_map:
+                collection_ids = list(registry_map.keys())
+                logger.debug(f"Using all {len(collection_ids)} collections from registry")
+            else:
+                collection_ids = list(self._parquet_urls.keys())
+                logger.debug(f"Using all {len(collection_ids)} collections from PARQUET_URLS_JSON")
 
         sources = []
         for cid in collection_ids:
-            if cid not in self._parquet_urls:
+            # Check if collection exists in either registry or config
+            if cid not in registry_map and cid not in self._parquet_urls:
                 raise ValueError(f"No Parquet configured for collection '{cid}'")
 
-            # Get the DuckDB-compatible URL through storage backend
+            # Get the DuckDB-compatible URL (this will check registry first, then fallback)
             url = self.get_collection_parquet_url(cid)
             sources.append((cid, url))
         return sources

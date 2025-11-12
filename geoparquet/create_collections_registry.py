@@ -19,7 +19,11 @@ import pyarrow.parquet as pq
 from shapely.geometry import box
 
 
-def extract_collection_info(collection_json_path: Path) -> Optional[Dict[str, Any]]:
+def extract_collection_info(
+    collection_json_path: Path,
+    azure_account: Optional[str] = None,
+    azure_container: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """Extract collection information from a collection.json file.
 
     Args:
@@ -70,8 +74,13 @@ def extract_collection_info(collection_json_path: Path) -> Optional[Dict[str, An
         parquet_file = collection_dir / f"{collection_id}.parquet"
 
         if parquet_file.exists():
-            # Use relative path from stac_collections directory
-            storage_location = f"{collection_id}/{collection_id}.parquet"
+            # Generate storage location based on deployment target
+            if azure_account and azure_container:
+                # Azure Blob Storage URL
+                storage_location = f"collections/{collection_id}/{collection_id}.parquet"
+            else:
+                # Local relative path from stac_collections directory
+                storage_location = f"{collection_id}/{collection_id}.parquet"
         else:
             print(f"Warning: No parquet file found for {collection_id}")
             storage_location = None
@@ -97,12 +106,19 @@ def extract_collection_info(collection_json_path: Path) -> Optional[Dict[str, An
         return None
 
 
-def create_collections_registry(stac_dir: Path, output_path: Path) -> None:
+def create_collections_registry(
+    stac_dir: Path,
+    output_path: Path,
+    azure_account: Optional[str] = None,
+    azure_container: Optional[str] = None,
+) -> None:
     """Create a collections registry GeoParquet file.
 
     Args:
         stac_dir: Path to stac_collections directory
         output_path: Path for output collections.parquet file
+        azure_account: Optional Azure storage account name for Azure URLs
+        azure_container: Optional Azure container name for Azure URLs
     """
     collections_info = []
 
@@ -116,7 +132,7 @@ def create_collections_registry(stac_dir: Path, output_path: Path) -> None:
             print(f"Skipping {collection_dir.name}: no collection.json found")
             continue
 
-        info = extract_collection_info(collection_json)
+        info = extract_collection_info(collection_json, azure_account, azure_container)
         if info:
             collections_info.append(info)
 
@@ -212,17 +228,52 @@ def add_collection_metadata_to_parquet(
 
 def main() -> None:
     """Create collections registry and update parquet files."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Create a collections registry GeoParquet file"
+    )
+    parser.add_argument(
+        "--stac-dir",
+        type=Path,
+        help="Path to stac_collections directory",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Path for output collections.parquet file",
+    )
+    parser.add_argument(
+        "--azure-account",
+        type=str,
+        help="Azure storage account name (for Azure URL generation)",
+    )
+    parser.add_argument(
+        "--azure-container",
+        type=str,
+        help="Azure container name (for Azure URL generation)",
+    )
+
+    args = parser.parse_args()
+
     # Determine paths
     script_dir = Path(__file__).parent
     repo_root = script_dir.parent
-    stac_dir = repo_root / "stac_collections"
-    output_path = stac_dir / "collections.parquet"
+    stac_dir = args.stac_dir if args.stac_dir else repo_root / "stac_collections"
+    output_path = (
+        args.output if args.output else stac_dir / "collections.parquet"
+    )
 
     print(f"Scanning collections in: {stac_dir}")
-    print(f"Output will be: {output_path}\n")
+    print(f"Output will be: {output_path}")
+    if args.azure_account:
+        print(f"Generating Azure URLs for account: {args.azure_account}")
+    print()
 
     # Create collections registry
-    create_collections_registry(stac_dir, output_path)
+    create_collections_registry(
+        stac_dir, output_path, args.azure_account, args.azure_container
+    )
 
     # Add collection metadata to each collection's parquet file
     print("\nAdding collection metadata to STAC item parquet files...")
