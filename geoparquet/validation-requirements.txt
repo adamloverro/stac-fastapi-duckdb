@@ -1,0 +1,7 @@
+# Requirements for STAC GeoParquet validation tool
+# Install with: pip install -r validation-requirements.txt
+
+stac-geoparquet>=0.5.0
+pandas>=2.0.0
+pyarrow>=10.0.0
+geopandas>=0.13.0

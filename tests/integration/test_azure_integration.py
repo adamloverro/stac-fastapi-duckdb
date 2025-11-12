@@ -242,6 +242,61 @@ class TestAzureIntegration:
         finally:
             conn.close()
 
+    @pytest.mark.integration
+    def test_azure_collections_registry_integration(
+        self, azure_storage_account, azure_test_container, azure_sas_token
+    ):
+        """Test that DuckDB can read the collections registry from Azure."""
+        import duckdb
+
+        backend = AzureBlobStorageBackend(
+            account_name=azure_storage_account,
+            container_name=azure_test_container,
+            authentication="sas_token",
+            sas_token=azure_sas_token,
+        )
+
+        # Create a temporary DuckDB connection
+        conn = duckdb.connect(":memory:")
+
+        # Install and load httpfs extension for remote file access
+        conn.execute("INSTALL httpfs;")
+        conn.execute("LOAD httpfs;")
+
+        # Generate URL for collections registry
+        collections_url = backend.get_url("collections.parquet")
+
+        try:
+            # Query the collections registry
+            result = conn.execute(
+                f"SELECT collection_id, title, storage_location FROM read_parquet('{collections_url}')"
+            ).fetchall()
+
+            # Verify we can read the registry
+            assert (
+                len(result) > 0
+            ), "Collections registry should contain at least one collection"
+
+            # Verify the expected collection exists
+            collection_ids = [row[0] for row in result]
+            assert (
+                "io-lulc-9-class" in collection_ids
+            ), "io-lulc-9-class should be in registry"
+
+            print(f"Successfully read {len(result)} collections from Azure registry")
+
+        except Exception as e:
+            # If file doesn't exist, that's expected
+            if "No such file or directory" in str(e) or "HTTP Error 404" in str(e):
+                pytest.skip(f"Collections registry missing in Azure container: {e}")
+            else:
+                # Other errors might indicate real connectivity issues
+                pytest.fail(
+                    f"DuckDB failed to read collections registry from Azure: {e}"
+                )
+        finally:
+            conn.close()
+
 
 class TestAzureIntegrationErrorCases:
     """Test error cases with real Azure infrastructure."""

@@ -224,10 +224,68 @@ create_test_data() {
     # Upload all parquet files from stac_collections
     local uploaded_count=0
     
-    # Find and upload all .parquet files
+    # Generate collections registry with Azure URLs before uploading
+    print_status "Generating collections registry with Azure URLs..."
+    local geoparquet_script="${project_root}/geoparquet/create_collections_registry.py"
+    local temp_registry="/tmp/collections_azure.parquet"
+    
+    if [[ -f "$geoparquet_script" ]]; then
+        # Run the script with Azure-specific parameters
+        python3 "$geoparquet_script" \
+            --stac-dir "$stac_collections_dir" \
+            --output "$temp_registry" \
+            --azure-account "$DEPLOYED_STORAGE_ACCOUNT" \
+            --azure-container "$DEPLOYED_CONTAINER" \
+            2>&1
+        
+        if [[ -f "$temp_registry" ]]; then
+            print_status "Uploading generated collections registry..."
+            if az storage blob upload \
+                --account-name "$DEPLOYED_STORAGE_ACCOUNT" \
+                --container-name "$DEPLOYED_CONTAINER" \
+                --name "collections.parquet" \
+                --file "$temp_registry" \
+                --overwrite \
+                --output none; then
+                print_success "✓ Uploaded: collections.parquet (Azure URLs)"
+                ((uploaded_count++))
+                rm -f "$temp_registry"
+            else
+                print_error "✗ Failed to upload: collections.parquet"
+            fi
+        else
+            print_error "Failed to generate collections registry"
+        fi
+    else
+        print_warning "Collections registry script not found at: $geoparquet_script"
+        # Fallback: upload existing registry if available
+        if [[ -f "${stac_collections_dir}/collections.parquet" ]]; then
+            print_warning "Using existing collections.parquet (may have local paths)"
+            if az storage blob upload \
+                --account-name "$DEPLOYED_STORAGE_ACCOUNT" \
+                --container-name "$DEPLOYED_CONTAINER" \
+                --name "collections.parquet" \
+                --file "${stac_collections_dir}/collections.parquet" \
+                --overwrite \
+                --output none; then
+                print_success "✓ Uploaded: collections.parquet"
+                ((uploaded_count++))
+            else
+                print_error "✗ Failed to upload: collections.parquet"
+            fi
+        fi
+    fi
+    
+    # Find and upload all .parquet files from subdirectories
     while IFS= read -r -d '' parquet_file; do
         local filename=$(basename "$parquet_file")
         local collection_name=$(basename "$(dirname "$parquet_file")")
+        
+        # Skip the root-level collections.parquet (already uploaded above)
+        if [[ "$filename" == "collections.parquet" && "$collection_name" == "stac_collections" ]]; then
+            continue
+        fi
+        
         local blob_name="collections/${collection_name}/${filename}"
         
         print_status "Uploading $filename from collection $collection_name..."
